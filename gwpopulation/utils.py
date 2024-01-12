@@ -137,7 +137,7 @@ def truncnorm(xx, mu, sigma, high, low):
     .. math::
         p(x) =
         \sqrt{\frac{2}{\pi\sigma^2}}
-        \left[\text{erf}\left(\frac{x_\max - \mu}{\sqrt{2}}\right) + \text{erf}\left(\frac{\mu - x_\min}{\sqrt{2}}\right)\right]^{-1}
+        \left[\text{erf}\left(\frac{x_\max - \mu}{\sqrt{2}\sigma}\right) + \text{erf}\left(\frac{\mu - x_\min}{\sqrt{2}\sigma}\right)\right]^{-1}
         \exp\left(-\frac{(\mu - x)^2}{2 \sigma^2}\right)
 
     Parameters
@@ -164,6 +164,50 @@ def truncnorm(xx, mu, sigma, high, low):
         (mu - low) / 2**0.5 / sigma
     )
     prob = xp.exp(-xp.power(xx - mu, 2) / (2 * sigma**2))
+    prob *= norm
+    prob *= (xx <= high) & (xx >= low)
+    return prob
+
+@apply_conditions(dict(sigma=(gt, 0))) # LUCY: do I need to add more conditions here?,
+def truncskewnorm(xx, mu, sigma, alpha, high, low):
+    r"""
+    Truncated skew normal probability
+
+    .. math::
+        p(x) =
+        \sqrt{\frac{2}{\pi\sigma^2}}
+        \left[\text{erf}\left(\frac{x_\max - \mu}{\sqrt{2}\sigma}\right) + \text{erf}\left(\frac{\mu - x_\min}{\sqrt{2}\sigma}\right)
+        + 4 T\left(\frac{x_\min - \mu}{\sigma}, \alpha\right) - 4 T\left(\frac{x_\max - \mu}{\sigma}, \alpha\right)\right]^{-1} 
+        \exp\left(-\frac{(\mu - x)^2}{2 \sigma^2}\right)
+        \left[1 + \text{erf}\left(\frac{\alpha\left(x_ - \mu\right)}{\sqrt{2}\sigma}\right)]
+
+    where T is the Owen's T distribution.
+    Parameters
+    ----------
+    xx: float, array-like
+        The abscissa values (:math:`x`)
+    mu: float, array-like
+        The mean of the normal distribution (:math:`\mu`)
+    sigma: float
+        The standard deviation of the distribution (:math:`\sigma`)
+    alpha: float
+        The skew parameter of the distribution (:math:`\alpha`)
+    high: float, array-like
+        The maximum of the distribution (:math:`x_\min`)
+    low: float, array-like
+        The minimum of the distribution (:math:`x_\max`)
+
+    Returns
+    -------
+    prob: float, array-like
+        The distribution evaluated at `xx`
+
+    """
+    norm = 2**0.5 / xp.pi**0.5 / sigma
+    norm /= scs.erf((high - mu) / 2**0.5 / sigma) + scs.erf(
+        (mu - low) / 2**0.5 / sigma) + 4 * scs.owens_t((mu - low) / sigma, alpha)  - 4 * scs.owens_t(
+        (high - mu) / sigma, alpha)
+    prob = xp.exp(-xp.power(xx - mu, 2) / (2 * sigma**2)) * (1 + scs.erf(alpha * (xx - mu) / 2**0.5 / sigma))
     prob *= norm
     prob *= (xx <= high) & (xx >= low)
     return prob
