@@ -18,5 +18,5 @@ The code is hosted at `<www.github.com/ColmTalbot/gwpopulation>`_ and
 available via :code:`conda-forge` and :code:`pypi`.
 """
 from . import conversions, hyperpe, models, utils, vt
-from ._version import __version__
+#from ._version import __version__
 from .backend import SUPPORTED_BACKENDS, set_backend
