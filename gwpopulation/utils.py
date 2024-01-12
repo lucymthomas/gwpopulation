@@ -219,7 +219,7 @@ def unnormalized_2d_gaussian(xx, yy, mu_x, mu_y, sigma_x, sigma_y, covariance):
     neglecting normalization terms.
 
     .. math::
-        \ln p(x) = (x - \mu_{x} y - \mu_{y}) \Sigma^{-1} (x - \mu_x y - \mu_{y})^{T} \\
+        \ln p(x, y) = (x - \mu_{x} y - \mu_{y}) \Sigma^{-1} (x - \mu_x y - \mu_{y})^{T} \\
         \Sigma = \begin{bmatrix}
                 \sigma^{2}_{x} & \rho \sigma_{x} \sigma_{y} \\
                 \rho \sigma_{x} \sigma_{y} & \sigma^{2}_{y}
@@ -255,6 +255,51 @@ def unnormalized_2d_gaussian(xx, yy, mu_x, mu_y, sigma_x, sigma_y, covariance):
         / 2
         / determinant
     )
+    return prob
+
+def unnormalized_2d_skew_gaussian(xx, yy, mu_x, mu_y, sigma_x, sigma_y, skew_x, skew_y, covariance):
+    r"""
+    Compute the probability distribution for a correlated 2-dimensional skew Gaussian
+    neglecting normalization terms which arise from the truncation, but including normalisation 
+    terms which arise as a result of the skew.
+
+    .. math::
+        p(x, y) = 2\exp\left((x - \mu_{x} y - \mu_{y}) \Sigma^{-1} (x - \mu_x y - \mu_{y})^{T}\right) \Phi\left(\alpha_{x} \frac{x - \mu_{x}}{\sigma_{x}} + \alpha_{y} \frac{y - \mu_{y}}{\sigma_{y}}\right)\\
+        \Sigma = \begin{bmatrix}
+                \sigma^{2}_{x} & \rho \sigma_{x} \sigma_{y} \\
+                \rho \sigma_{x} \sigma_{y} & \sigma^{2}_{y}
+            \end{bmatrix}\\
+        \Phi(z) = \frac{1}{2} \left[1 + \text{erf}\left(\frac{z}{\sqrt{2}}\right)\right]
+
+    Parameters
+    ----------
+    xx: array-like
+        Input data in first dimension (:math:`x`)
+    yy: array-like
+        Input data in second dimension (:math:`y`)
+    mu_x: float
+        Mean in the first dimension (:math:`\mu_{x}`)
+    sigma_x: float
+        Standard deviation in the first dimension (:math:`\sigma_{x}`)
+    skew_x: float
+        Skew in the first dimension (:math:`\alpha_{x}`)
+    mu_y: float
+        Mean in the second dimension (:math:`\mu_{y}`)
+    sigma_y: float
+        Standard deviation in the second dimension (:math:`\sigma_{y}`)
+    skew_y: float
+        Skew in the second dimension (:math:`\alpha_{y}`)
+    covariance: float
+        The normalized covariance (bounded in [0, 1]) (:math:`\rho`)
+
+    Returns
+    -------
+    prob: array-like
+        The unnormalized probability distribution (:math:`p(x)`)
+    """
+    norm = 0.5 * (1 + scs.erf(skew_x * (xx - mu_x) / sigma_x / xp.sqrt(2) + skew_y * (yy - mu_y) / sigma_y / xp.sqrt(2)))
+    prob = 2 * unnormalized_2d_gaussian(xx, yy, mu_x, mu_y, sigma_x, sigma_y, covariance)
+    prob *= norm
     return prob
 
 
