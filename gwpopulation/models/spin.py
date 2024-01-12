@@ -277,6 +277,156 @@ def gaussian_chi_p_chi_eff(dataset, mu_chi_eff, sigma_chi_eff, mu_chi_p, sigma_c
     return prob
 
 
+def skew_gaussian_chi_eff(dataset, mu_chi_eff, sigma_chi_eff, skew_chi_eff):
+    r"""
+    A Gaussian in chi effective distribution with skewness
+
+    See https://arxiv.org/abs/2001.06051, https://arxiv.org/abs/2010.14533
+
+    .. math::
+        p(\chi_{\text{eff}}) = \mathcal{N}(\chi_{\text{eff}}; \mu=\mu_\chi, \sigma=\sigma_\chi, x_\min=-1, m_\max=1)
+
+    Where :math:`\mathcal{N}` is a truncated Gaussian.
+
+    Parameters
+    ----------
+    dataset: dict
+        Input data, must contain `chi_eff` (:math:`\chi_{\text{eff}}`)
+    mu_chi_eff: float
+        Mean of the distribution (:math:`\mu_\chi`)
+    sigma_chi_eff: float
+        Standard deviation of the distribution (:math:`\sigma_\chi`)
+
+    Returns
+    -------
+    array-like: The probability
+    """
+    return truncskewnorm(
+        dataset["chi_eff"], mu=mu_chi_eff, sigma=sigma_chi_eff, alpha=skew_chi_eff, low=-1, high=1
+    )
+
+
+def skew_gaussian_chi_p(dataset, mu_chi_p, sigma_chi_p, skew_chi_p):
+    r"""
+    A Gaussian distribution in precessing effective spin (chi p) with skewness
+
+    See https://arxiv.org/abs/2001.06051, https://arxiv.org/abs/2010.14533
+
+    .. math::
+        p(\chi_p) = \mathcal{N}(\chi_p}; \mu=\mu_\chi, \sigma=\sigma_\chi, x_\min=0, m_\max=1)
+
+    Where :math:`\mathcal{N}` is a truncated Gaussian.
+
+    Parameters
+    ----------
+    dataset: dict
+        Input data, must contain `chi_eff` (:math:`\chi_p`)
+    mu_chi_p: float
+        Mean of the distribution (:math:`\mu_\chi`)
+    sigma_chi_p: float
+        Standard deviation of the distribution (:math:`\sigma_\chi`)
+
+    Returns
+    -------
+    array-like: The probability
+    """
+    return truncskewnorm(dataset["chi_p"], mu=mu_chi_p, sigma=sigma_chi_p, alpha=skew_chi_p, low=0, high=1)
+
+def gaussian_chi_p_chi_eff_skew(dataset, mu_chi_eff, sigma_chi_eff, mu_chi_p, sigma_chi_p, skew_chi_eff, skew_chi_p, rho):
+    r"""
+    A covariant Gaussian in effective aligned and precessing spins, including skew.
+
+    See https://arxiv.org/abs/2001.06051, https://arxiv.org/abs/2010.14533
+
+    The covariance matrix is given by:
+
+    .. math::
+        \Sigma = \begin{bmatrix}
+            \sigma^2_{\text{eff}} & \rho \sigma_{\text{eff}} \sigma_{p} \\
+            \rho \sigma_{\text{eff}} \sigma_{p} & \sigma^2_{p}
+        \end{bmatrix}
+
+    Parameters
+    ----------
+    dataset: dict
+        Dictionary of numpy arrays for 'chi_eff' and 'chi_p'.
+    mu_chi_eff: float
+        Mean of the chi effective distribution (:math:`\mu_{\text{eff}}`)
+    mu_chi_p: float
+        Mean of the chi p distribution (:math:`\mu_{p}`)
+    sigma_chi_eff: float
+        Standard deviation of the chi effective distribution (:math:`\sigma_{\text{eff}}`)
+    sigma_chi_p: float
+        Standard deviation of the chi p distribution (:math:`\sigma_{p}`)
+    skew_chi_eff: float
+        Skewness of the chi effective  distribution (:math:`\alpha_{\text{eff}}`)
+    skew_chi_p: float
+        Skewness of the chi p distribution (:math:`\alpha_{p}`)
+    rho: float
+        Covariance between the two parameters (:math:`\rho`)
+    Returns
+    -------
+    array-like: The probability
+    """
+
+    def _normalization(mu_chi_eff, sigma_chi_eff, mu_chi_p, sigma_chi_p, skew_chi_eff, skew_chi_p, rho):
+        chi_eff_linspace = xp.linspace(-1, 1, 500)
+        chi_p_linspace = xp.linspace(0, 1, 250)
+        chi_eff_grid, chi_p_grid = xp.meshgrid(chi_eff_linspace, chi_p_linspace)
+
+        prob_grid = unnormalized_2d_skew_gaussian(
+            chi_eff_grid,
+            chi_p_grid,
+            mu_chi_eff,
+            mu_chi_p,
+            sigma_chi_eff,
+            sigma_chi_p,
+            skew_chi_eff,
+            skew_chi_p,
+            rho,
+        )
+        normalization = xp.trapz(y=xp.trapz(y=prob_grid, axis=-1, x=chi_eff_linspace), axis=-1, x=chi_p_linspace)
+        return normalization
+    
+    if rho == 0:
+        prob = skew_gaussian_chi_eff(
+            dataset=dataset,
+            mu_chi_eff=mu_chi_eff,
+            sigma_chi_eff=sigma_chi_eff,
+            skew_chi_eff=skew_chi_eff,
+        )
+        prob *= skew_gaussian_chi_p(
+            dataset=dataset, mu_chi_p=mu_chi_p, sigma_chi_p=sigma_chi_p,
+            skew_chi_p=skew_chi_p,
+        )
+    else:
+        prob = unnormalized_2d_skew_gaussian(
+            dataset["chi_eff"],
+            dataset["chi_p"],
+            mu_chi_eff,
+            mu_chi_p,
+            sigma_chi_eff,
+            sigma_chi_p,
+            skew_chi_eff,
+            skew_chi_p,
+            rho,
+        )
+        normalization = _normalization(
+            mu_chi_eff=mu_chi_eff,
+            sigma_chi_eff=sigma_chi_eff,
+            mu_chi_p=mu_chi_p,
+            sigma_chi_p=sigma_chi_p,
+            skew_chi_eff=skew_chi_eff,
+            skew_chi_p=skew_chi_p,
+            rho=rho,
+        )
+        prob /= normalization
+        prob *= xp.abs(dataset["chi_eff"]) <= 1
+        prob *= (dataset["chi_p"] <= 1) * (dataset["chi_p"] >= 0)
+        
+    return prob
+
+
 class SplineSpinMagnitudeIdentical(InterpolatedNoBaseModelIdentical):
     def __init__(self, minimum=0, maximum=1, nodes=5, kind="cubic"):
 
